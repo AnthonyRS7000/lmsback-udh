@@ -7,13 +7,17 @@ use Illuminate\Http\Request;
 
 class StudentController extends Controller
 {
-    // Listar todos los estudiantes
+    /**
+     * Listar todos los estudiantes
+     */
     public function index()
     {
-        return Student::all();
+        return response()->json(Student::all(), 200);
     }
 
-    // Crear nuevo estudiante
+    /**
+     * Crear nuevo estudiante
+     */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -27,15 +31,22 @@ class StudentController extends Controller
         return response()->json($student, 201);
     }
 
-    // Mostrar un estudiante por ID
-    public function show(Student $student)
+    /**
+     * Mostrar un estudiante por ID
+     */
+    public function show($id)
     {
-        return $student;
+        $student = Student::findOrFail($id);
+        return response()->json($student, 200);
     }
 
-    // Actualizar estudiante
-    public function update(Request $request, Student $student)
+    /**
+     * Actualizar estudiante
+     */
+    public function update(Request $request, $id)
     {
+        $student = Student::findOrFail($id);
+
         $validated = $request->validate([
             'name'  => 'sometimes|string|max:255',
             'email' => 'sometimes|email|unique:students,email,' . $student->id,
@@ -44,12 +55,15 @@ class StudentController extends Controller
 
         $student->update($validated);
 
-        return response()->json($student);
+        return response()->json($student, 200);
     }
 
-    // Eliminar estudiante
-    public function destroy(Student $student)
+    /**
+     * Eliminar estudiante
+     */
+    public function destroy($id)
     {
+        $student = Student::findOrFail($id);
         $student->delete();
 
         return response()->json(null, 204);
