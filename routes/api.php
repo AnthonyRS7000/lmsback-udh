@@ -1,15 +1,16 @@
 <?php
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\StudentController;
+use App\Http\Controllers\UsuarioController;
+use App\Http\Controllers\TokenUdhController;
 
-Route::get('/students', [StudentController::class, 'index']);
-Route::post('/students', [StudentController::class, 'store']);
-Route::get('/students/{id}', [StudentController::class, 'show']);
-Route::put('/students/{id}', [StudentController::class, 'update']);
-Route::delete('/students/{id}', [StudentController::class, 'destroy']);
-;
-Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {
-    return $request->user();
+
+// Registro/Login con Google
+Route::post('/auth/google', [UsuarioController::class, 'store']);
+Route::get('/udh/token', [TokenUdhController::class, 'token']);
+
+// Rutas protegidas con Sanctum
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/usuarios', [UsuarioController::class, 'index']);
+    Route::get('/usuarios/{usuario}', [UsuarioController::class, 'show']);
 });
