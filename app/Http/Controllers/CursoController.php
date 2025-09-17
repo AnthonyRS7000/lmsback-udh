@@ -7,59 +7,38 @@ use Illuminate\Http\Request;
 
 class CursoController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index()
     {
-        //
+        return Curso::with('docente')->get();
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
-        //
+        $validated = $request->validate([
+            'nombre' => 'required|string|max:150',
+            'codigo' => 'required|string|max:50|unique:cursos,codigo',
+            'docente_id' => 'required|exists:docentes,id',
+        ]);
+
+        $curso = Curso::create($validated);
+
+        return response()->json($curso, 201);
     }
 
-    /**
-     * Display the specified resource.
-     */
     public function show(Curso $curso)
     {
-        //
+        return $curso->load(['docente', 'tareas']);
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Curso $curso)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, Curso $curso)
     {
-        //
+        $curso->update($request->all());
+        return response()->json($curso, 200);
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(Curso $curso)
     {
-        //
+        $curso->delete();
+        return response()->json(null, 204);
     }
 }

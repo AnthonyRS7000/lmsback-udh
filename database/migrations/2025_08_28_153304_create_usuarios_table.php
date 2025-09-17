@@ -20,10 +20,12 @@ return new class extends Migration
             $table->string('numero_documento', 12)->nullable();
             $table->unique(['tipo_documento','numero_documento'], 'usuarios_doc_unique');
 
-            // Contacto / rol
+            // Contacto
             $table->string('email')->unique();
             $table->string('telefono')->nullable();
-            $table->enum('rol', ['admin','estudiante','docente'])->default('estudiante');
+
+            // 🔗 Relación con roles
+            $table->foreignId('role_id')->constrained('roles')->cascadeOnUpdate()->restrictOnDelete();
 
             // Autenticación local
             $table->timestamp('email_verified_at')->nullable();

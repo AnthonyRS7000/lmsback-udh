@@ -8,7 +8,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Usuario extends Authenticatable
 {
@@ -23,7 +23,7 @@ class Usuario extends Authenticatable
         'numero_documento',
         'email',
         'telefono',
-        'rol',            // si aún quieres mantener un rol simple
+        'role_id',          // 👈 en lugar de "rol"
         'password',
         'google_id',
         'google_avatar',
@@ -58,12 +58,11 @@ class Usuario extends Authenticatable
     }
 
     /**
-     * Relación muchos a muchos con roles (via tabla pivot usuario_rol)
+     * Relación hacia Rol (un usuario pertenece a un rol)
      */
-    public function roles(): BelongsToMany
+    public function role(): BelongsTo
     {
-        return $this->belongsToMany(Rol::class, 'usuario_rol', 'usuario_id', 'rol_id')
-                    ->withTimestamps();
+        return $this->belongsTo(Rol::class, 'role_id');
     }
 
     /**
@@ -71,6 +70,6 @@ class Usuario extends Authenticatable
      */
     public function hasRole(string $slug): bool
     {
-        return $this->roles()->where('slug', $slug)->exists();
+        return $this->role && $this->role->slug === $slug;
     }
 }
