@@ -47,6 +47,6 @@ Route::middleware('auth:sanctum')->group(function () {
 //  Rutas exclusivas para PROYECTOS TÉCNICOS
 //  (solo accesibles con tokens con ability: docentes:read)
 // =========================
-Route::middleware(['auth:sanctum', 'ability:docentes:read'])->group(function () {
+Route::middleware(['auth:sanctum', 'abilities:docentes:read'])->group(function () {
     Route::get('/docentes/dni/{dni}', [DocenteController::class, 'getByDni']);
 });
