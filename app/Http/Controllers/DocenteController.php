@@ -46,8 +46,17 @@ class DocenteController extends Controller
         return response()->json(null, 204);
     }
 
-    public function getByDni($dni, UdhTokenService $tokenService)
+    public function getByDni($dni, UdhTokenService $tokenService, Request $request)
     {
+        // 🔒 Verificar ability del token
+        if (! $request->user()->tokenCan('docentes:read')) {
+            Log::warning("🚫 Token sin permiso para docentes:read", [
+                'user_id' => $request->user()->id,
+                'email'   => $request->user()->email,
+            ]);
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+
         Log::info("📌 Consultando API UDH para docente", ['dni' => $dni]);
 
         // 1. Obtener token válido desde BD
@@ -57,7 +66,8 @@ class DocenteController extends Controller
             return response()->json(['error' => 'No hay token válido en BD'], 500);
         }
         $token = $tokenRecord->token_actual;
-        Log::info("🔑 Token usado", ['token' => $token]);
+
+        Log::info("🔑 Token usado para API UDH");
 
         // 2. URL de la API de docentes
         $url = config('udh.apis.docentes');
@@ -70,7 +80,7 @@ class DocenteController extends Controller
             'token'  => $token,
         ]);
 
-        Log::info("📡 Respuesta API", [
+        Log::info("📡 Respuesta API UDH", [
             'status' => $response->status(),
             'body'   => $response->body(),
         ]);
@@ -82,7 +92,7 @@ class DocenteController extends Controller
 
         $data = $response->json();
 
-        // 👇 la API de Docentes podría devolver directamente el objeto en lugar de 'data'
+        // 👇 la API puede devolver directamente un objeto o dentro de "data"
         $result = $data['data'] ?? $data;
 
         if (empty($result)) {
@@ -90,7 +100,7 @@ class DocenteController extends Controller
             return response()->json(['error' => 'Sin datos en API', 'raw' => $data], 404);
         }
 
-        Log::info("✅ Docente obtenido correctamente", ['dni' => $dni, 'result' => $result]);
+        Log::info("✅ Docente obtenido correctamente", ['dni' => $dni]);
 
         return response()->json([
             'status' => 'success',

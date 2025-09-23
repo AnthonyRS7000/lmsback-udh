@@ -9,44 +9,36 @@ use App\Http\Controllers\DocenteController;
 use App\Http\Controllers\CursoController;
 use App\Http\Controllers\HorarioController;
 
-// =========================
-//  Autenticación pública
-// =========================
-Route::get('/auth/google', [UsuarioController::class, 'redirectToGoogle']);   // Paso 1: redirección
+// === Autenticación con Google ===
+Route::get('/auth/google', [UsuarioController::class, 'redirectToGoogle']);
 Route::get('/auth/google/callback', [UsuarioController::class, 'handleGoogleCallback']);
 Route::post('/login', [UsuarioController::class, 'login']);
 
-// =========================
-//  Token del sistema antiguo
-// =========================
+// === Token del sistema antiguo (ejemplo) ===
 Route::get('/udh/token', [TokenUdhController::class, 'token']);
 
-// =========================
-//  Rutas protegidas con Sanctum (usuarios normales)
-// =========================
+// === Rutas públicas (ejemplo: tareas)
+Route::apiResource('tareas', TareaController::class);
+
+// === Rutas protegidas con Sanctum ===
 Route::middleware('auth:sanctum')->group(function () {
 
     // === Usuarios ===
     Route::get('/usuarios', [UsuarioController::class, 'index']);
     Route::get('/usuarios/{usuario}', [UsuarioController::class, 'show']);
 
-    // === Horario (usuarios normales logueados) ===
+    // === Horarios ===
     Route::get('/horario/{codalu}/{semsem}', [HorarioController::class, 'getHorario']);
 
     // === Entregas de Tareas ===
     Route::apiResource('entregas', EntregaTareaController::class);
 
-    // === Docentes (CRUD normal de docentes para usuarios internos) ===
+    // === Docentes (uso general) ===
     Route::apiResource('docentes', DocenteController::class);
 
+    // === Docentes (uso técnico con token especial) ===
+    Route::get('/docentes/dni/{dni}', [DocenteController::class, 'getByDni']);
+    
     // === Cursos ===
     Route::apiResource('cursos', CursoController::class);
-});
-
-// =========================
-//  Rutas exclusivas para PROYECTOS TÉCNICOS
-//  (solo accesibles con tokens con ability: docentes:read)
-// =========================
-Route::middleware(['auth:sanctum', 'abilities:docentes:read'])->group(function () {
-    Route::get('/docentes/dni/{dni}', [DocenteController::class, 'getByDni']);
 });
