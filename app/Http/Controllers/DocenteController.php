@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Docente;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use App\Services\UdhTokenService;
 
 class DocenteController extends Controller
@@ -44,18 +45,23 @@ class DocenteController extends Controller
         $docente->delete();
         return response()->json(null, 204);
     }
-        public function getByDni($dni, UdhTokenService $tokenService)
+
+    public function getByDni($dni, UdhTokenService $tokenService)
     {
+        Log::info("📌 Consultando API UDH para docente", ['dni' => $dni]);
+
         // 1. Obtener token válido desde BD
         $tokenRecord = $tokenService->getActiveToken();
         if (!$tokenRecord) {
+            Log::error("❌ No hay token válido en BD");
             return response()->json(['error' => 'No hay token válido en BD'], 500);
         }
         $token = $tokenRecord->token_actual;
+        Log::info("🔑 Token usado", ['token' => $token]);
 
         // 2. URL de la API de docentes
-        $url = config('udh.apis.docentes'); 
-        // 👆 en config/udh.php defines 'docentes' => 'http://www.udh.edu.pe/websauh/apis/DocentesAPI.aspx'
+        $url = config('udh.apis.docentes');
+        Log::info("🌍 URL API", ['url' => $url]);
 
         // 3. Hacer la consulta
         $response = Http::get($url, [
@@ -64,19 +70,32 @@ class DocenteController extends Controller
             'token'  => $token,
         ]);
 
+        Log::info("📡 Respuesta API", [
+            'status' => $response->status(),
+            'body'   => $response->body(),
+        ]);
+
         if ($response->failed()) {
+            Log::error("❌ Error al consultar API UDH", ['status' => $response->status()]);
             return response()->json(['error' => 'Error al consultar API UDH'], 500);
         }
 
         $data = $response->json();
-        if (!isset($data['data']) || empty($data['data'])) {
+
+        // 👇 la API de Docentes podría devolver directamente el objeto en lugar de 'data'
+        $result = $data['data'] ?? $data;
+
+        if (empty($result)) {
+            Log::warning("⚠️ API UDH devolvió vacío", ['raw' => $data]);
             return response()->json(['error' => 'Sin datos en API', 'raw' => $data], 404);
         }
+
+        Log::info("✅ Docente obtenido correctamente", ['dni' => $dni, 'result' => $result]);
 
         return response()->json([
             'status' => 'success',
             'source' => 'udh_api',
-            'data'   => $data['data'],
+            'data'   => $result,
         ]);
     }
 }
