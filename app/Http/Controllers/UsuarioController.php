@@ -44,24 +44,17 @@ class UsuarioController extends Controller
         try {
             $googleUser = Socialite::driver('google')->stateless()->user();
         } catch (\Exception $e) {
-            return $this->errorResponse('Error en la autenticación con Google', 500);
+            return redirect()->away(config('app.frontend_url', 'http://localhost:5173/login') . "?error=google");
         }
 
         // normalizar email
         $email = strtolower(trim((string) $googleUser->getEmail()));
 
-        if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return $this->errorResponse('Email inválido', 400);
-        }
-
-        if (!str_ends_with($email, '@udh.edu.pe')) {
-            return $this->errorResponse('Solo se permiten correos institucionales UDH', 403);
+        if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL) || !str_ends_with($email, '@udh.edu.pe')) {
+            return redirect()->away(config('app.frontend_url', 'http://localhost:5173/login') . "?error=email");
         }
 
         $codigo = strstr($email, '@', true);
-        if (empty($codigo) || !preg_match('/^[a-zA-Z0-9._-]+$/', $codigo)) {
-            return $this->errorResponse('Código de usuario inválido', 400);
-        }
 
         // consultar API UDH
         try {
@@ -69,20 +62,20 @@ class UsuarioController extends Controller
             $response = Http::timeout(10)->retry(3, 1000)->get($url);
 
             if ($response->failed()) {
-                return $this->errorResponse('No se pudo conectar con la API UDH', 500);
+                return redirect()->away(config('app.frontend_url', 'http://localhost:5173/login') . "?error=api");
             }
 
             $data = $response->json()[0] ?? null;
             if (!$data) {
-                return $this->errorResponse('Código no encontrado en UDH', 404);
+                return redirect()->away(config('app.frontend_url', 'http://localhost:5173/login') . "?error=no-data");
             }
         } catch (\Exception $e) {
-            return $this->errorResponse('Error al consultar datos institucionales', 500);
+            return redirect()->away(config('app.frontend_url', 'http://localhost:5173/login') . "?error=api-exception");
         }
 
         $rolEstudiante = Rol::where('slug', 'estudiante')->first();
         if (!$rolEstudiante) {
-            return $this->errorResponse('Rol de estudiante no configurado', 500);
+            return redirect()->away(config('app.frontend_url', 'http://localhost:5173/login') . "?error=no-role");
         }
 
         $usuario = Usuario::where('email', $email)->first();
@@ -92,12 +85,7 @@ class UsuarioController extends Controller
             $apellidoPaterno  = $this->sanitizeString($data['stu_apellido_paterno'] ?? '');
             $apellidoMaterno  = $this->sanitizeString($data['stu_apellido_materno'] ?? '');
             $apellidos        = trim($apellidoPaterno . ' ' . $apellidoMaterno);
-
-            if (empty($nombres) || empty($apellidos)) {
-                return $this->errorResponse('Datos incompletos del estudiante', 400);
-            }
-
-            $dni = isset($data['stu_dni']) ? preg_replace('/\D/', '', (string) $data['stu_dni']) : null;
+            $dni              = isset($data['stu_dni']) ? preg_replace('/\D/', '', (string) $data['stu_dni']) : null;
 
             $usuario = Usuario::create([
                 'nombres'          => $nombres,
@@ -126,57 +114,32 @@ class UsuarioController extends Controller
         Auth::login($usuario);
         $token = $usuario->createToken('auth_token', ['*'], now()->addHours(24))->plainTextToken;
 
-        $state = $request->get('state');
+        // determinar ruta según rol
+        $rol = strtolower($usuario->role->slug ?? '');
+        $frontend = rtrim(config('app.frontend_url', 'http://localhost:5173'), '/');
 
-        $userData = [
-            'id'        => $usuario->id,
-            'nombres'   => $usuario->nombres,
-            'apellidos' => $usuario->apellidos,
-            'email'     => $usuario->email,
-            'rol'       => $usuario->role->slug ?? null,
-        ];
+        switch ($rol) {
+            case 'estudiante':
+                $redirectPath = "/estudiante";
+                break;
+            case 'docente':
+                $redirectPath = "/docente";
+                break;
+            case 'administrativo':
+                $redirectPath = "/administrativo";
+                break;
+            case 'escuela':
+                $redirectPath = "/escuela";
+                break;
+            case 'facultad':
+                $redirectPath = "/facultad";
+                break;
+            default:
+                $redirectPath = "/";
+        }
 
-        $udhData = [
-            'nombres'           => $this->sanitizeString($data['stu_nombres'] ?? ''),
-            'apellido_paterno'  => $this->sanitizeString($data['stu_apellido_paterno'] ?? ''),
-            'apellido_materno'  => $this->sanitizeString($data['stu_apellido_materno'] ?? ''),
-            'dni'               => isset($data['stu_dni']) ? preg_replace('/\D/', '', (string) $data['stu_dni']) : null,
-            'codigo'            => $this->sanitizeString($data['stu_codigo'] ?? ''),
-            'facultad'          => $this->sanitizeString($data['stu_facultad'] ?? ''),
-            'programa'          => $this->sanitizeString($data['stu_programa'] ?? ''),
-            'ciclo'             => $this->sanitizeString($data['stu_ciclo'] ?? ''),
-        ];
-
-        $allowedOrigins = [
-            config('app.frontend_url', 'http://localhost:5173'),
-            'http://localhost:5173',
-            'http://127.0.0.1:5173',
-            'https://lmsback.sistemasudh.com'
-        ];
-
-        $referer = $request->headers->get('origin');
-        $targetOrigin = in_array($referer, $allowedOrigins) ? $referer : $allowedOrigins[0];
-
-        return response()->make("
-          <script>
-            if (window.opener) {
-              const targetOrigin = '{$targetOrigin}';
-              window.opener.postMessage({
-                type: 'google-auth-success',
-                usuario: " . json_encode($userData) . ",
-                datos_udh: " . json_encode($udhData) . ",
-                foto: '" . htmlspecialchars($googleUser->getAvatar()) . "',
-                token: '" . htmlspecialchars($token) . "'" .
-                ($state ? ", state: '" . htmlspecialchars($state) . "'" : '') . "
-              }, targetOrigin);
-            }
-            window.close();
-          </script>
-        ", 200, [
-            'Content-Type' => 'text/html',
-            'X-Frame-Options' => 'SAMEORIGIN',
-            'X-Content-Type-Options' => 'nosniff'
-        ]);
+        // redirigir al frontend con token en query
+        return redirect()->away("{$frontend}{$redirectPath}?token={$token}");
     }
 
     /**
@@ -215,23 +178,5 @@ class UsuarioController extends Controller
     private function sanitizeString($string)
     {
         return htmlspecialchars(trim((string) $string), ENT_QUOTES, 'UTF-8');
-    }
-
-    private function errorResponse($message, $status = 400)
-    {
-        return response()->make("
-          <script>
-            if (window.opener) {
-              window.opener.postMessage({
-                type: 'google-auth-error',
-                message: '" . htmlspecialchars($message) . "'
-              }, '*');
-            }
-            window.close();
-          </script>
-        ", $status, [
-            'Content-Type' => 'text/html',
-            'X-Frame-Options' => 'SAMEORIGIN'
-        ]);
     }
 }
