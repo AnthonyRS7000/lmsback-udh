@@ -2,28 +2,27 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Curso extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
-        'nombre',
         'codigo',
+        'nombre',
+        'ciclo',
+        'creditos',
         'docente_id',
     ];
 
-    // 🔹 Relación con docente
+    // Un curso puede tener varias cargas académicas
+    public function cargas()
+    {
+        return $this->hasMany(CargaAcademica    ::class);
+    }
+
+    // Docente responsable principal (si aplica)
     public function docente()
     {
         return $this->belongsTo(Docente::class);
-    }
-
-    // 🔹 Relación con tareas
-    public function tareas()
-    {
-        return $this->hasMany(Tarea::class);
     }
 }

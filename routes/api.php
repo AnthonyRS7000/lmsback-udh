@@ -7,10 +7,12 @@ use App\Http\Controllers\TareaController;
 use App\Http\Controllers\EntregaTareaController;
 use App\Http\Controllers\DocenteController;
 use App\Http\Controllers\CursoController;
+use App\Http\Controllers\HorarioController;
 
 // === Autenticación con Google ===
 Route::get('/auth/google', [UsuarioController::class, 'redirectToGoogle']);   // Paso 1: redirección
-Route::get('/auth/google/callback', [UsuarioController::class, 'handleGoogleCallback']); // Paso 2: callback
+Route::get('/auth/google/callback', [UsuarioController::class, 'handleGoogleCallback']); 
+Route::post('/login', [UsuarioController::class, 'login']);
 
 // === Token del sistema antiguo (ejemplo) ===
 Route::get('/udh/token', [TokenUdhController::class, 'token']);
@@ -23,8 +25,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/usuarios', [UsuarioController::class, 'index']);
     Route::get('/usuarios/{usuario}', [UsuarioController::class, 'show']);
 
-    // === Tareas ===
-
+    Route::get('/horario/{codalu}/{semsem}', [HorarioController::class, 'getHorario']);
 
     // === Entregas de Tareas ===
     Route::apiResource('entregas', EntregaTareaController::class);

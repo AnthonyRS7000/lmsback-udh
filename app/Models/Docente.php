@@ -10,9 +10,9 @@ class Docente extends Model
     use HasFactory;
 
     protected $fillable = [
-        'nombres',
-        'apellidos',
+        'codigo_do',
         'email',
+        'grado',
         'telefono',
     ];
 

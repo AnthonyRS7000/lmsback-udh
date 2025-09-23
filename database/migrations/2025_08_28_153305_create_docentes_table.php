@@ -10,9 +10,8 @@ return new class extends Migration
     {
         Schema::create('docentes', function (Blueprint $table) {
             $table->id();
-            $table->string('nombres');
-            $table->string('apellidos');
-            $table->string('email')->unique();
+            $table->string('codigo_do')->unique();
+            $table->string('grado');
             $table->string('telefono')->nullable();
             $table->timestamps();
         });

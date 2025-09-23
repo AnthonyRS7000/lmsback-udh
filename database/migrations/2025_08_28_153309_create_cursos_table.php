@@ -10,10 +10,17 @@ return new class extends Migration
     {
         Schema::create('cursos', function (Blueprint $table) {
             $table->id();
+            $table->string('codigo')->unique(); // ej: 062102021
             $table->string('nombre');
-            $table->string('codigo')->unique();
-            $table->unsignedBigInteger('docente_id');
-            $table->foreign('docente_id')->references('id')->on('docentes')->onDelete('cascade');
+            $table->unsignedInteger('ciclo')->nullable();
+            $table->unsignedInteger('creditos')->nullable();
+
+            // Relación con docente opcional
+            $table->foreignId('docente_id')
+                  ->nullable()
+                  ->constrained('docentes')
+                  ->onDelete('set null');
+
             $table->timestamps();
         });
     }

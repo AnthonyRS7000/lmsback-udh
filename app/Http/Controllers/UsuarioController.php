@@ -14,25 +14,22 @@ use Laravel\Socialite\Facades\Socialite;
 class UsuarioController extends Controller
 {
     /**
-     * Paso 1: Redirigir al login de Google con state para CSRF protection
+     * Paso 1: Redirigir al login de Google
      */
     public function redirectToGoogle(Request $request)
     {
-        // Validar y sanitizar el state si se proporciona
         $state = $request->get('state');
-        
         $socialite = Socialite::driver('google')->stateless();
-        
+
         if ($state) {
-            // Validar que el state sea una cadena base64 válida
             $validator = Validator::make(['state' => $state], [
                 'state' => 'string|max:500'
             ]);
-            
+
             if ($validator->fails()) {
                 return response()->json(['error' => 'State inválido'], 400);
             }
-            
+
             $socialite = $socialite->with(['state' => $state]);
         }
 
@@ -50,9 +47,9 @@ class UsuarioController extends Controller
             return $this->errorResponse('Error en la autenticación con Google', 500);
         }
 
-        $email = $googleUser->getEmail();
+        // normalizar email
+        $email = strtolower(trim((string) $googleUser->getEmail()));
 
-        // Validar que el email sea válido y del dominio institucional
         if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return $this->errorResponse('Email inválido', 400);
         }
@@ -61,25 +58,21 @@ class UsuarioController extends Controller
             return $this->errorResponse('Solo se permiten correos institucionales UDH', 403);
         }
 
-        // Extraer y validar el código
         $codigo = strstr($email, '@', true);
         if (empty($codigo) || !preg_match('/^[a-zA-Z0-9._-]+$/', $codigo)) {
             return $this->errorResponse('Código de usuario inválido', 400);
         }
 
-        // Consultar API UDH con timeout y manejo de errores
+        // consultar API UDH
         try {
             $url = config('udh.apis.estudiante') . $codigo;
-            $response = Http::timeout(10)
-                ->retry(3, 1000)
-                ->get($url);
+            $response = Http::timeout(10)->retry(3, 1000)->get($url);
 
             if ($response->failed()) {
                 return $this->errorResponse('No se pudo conectar con la API UDH', 500);
             }
 
             $data = $response->json()[0] ?? null;
-
             if (!$data) {
                 return $this->errorResponse('Código no encontrado en UDH', 404);
             }
@@ -87,36 +80,41 @@ class UsuarioController extends Controller
             return $this->errorResponse('Error al consultar datos institucionales', 500);
         }
 
-        // Buscar rol estudiante
         $rolEstudiante = Rol::where('slug', 'estudiante')->first();
         if (!$rolEstudiante) {
             return $this->errorResponse('Rol de estudiante no configurado', 500);
         }
 
-        // Verificar si ya existe en BD
         $usuario = Usuario::where('email', $email)->first();
 
         if (!$usuario) {
-            // Sanitizar y validar datos antes de crear
-            $nombres = $this->sanitizeString($data['stu_nombres'] ?? '');
-            $apellidoPaterno = $this->sanitizeString($data['stu_apellido_paterno'] ?? '');
-            $apellidoMaterno = $this->sanitizeString($data['stu_apellido_materno'] ?? '');
-            $apellidos = trim($apellidoPaterno . ' ' . $apellidoMaterno);
+            $nombres          = $this->sanitizeString($data['stu_nombres'] ?? '');
+            $apellidoPaterno  = $this->sanitizeString($data['stu_apellido_paterno'] ?? '');
+            $apellidoMaterno  = $this->sanitizeString($data['stu_apellido_materno'] ?? '');
+            $apellidos        = trim($apellidoPaterno . ' ' . $apellidoMaterno);
 
             if (empty($nombres) || empty($apellidos)) {
                 return $this->errorResponse('Datos incompletos del estudiante', 400);
             }
 
-            // Crear usuario
+            // ✅ limpiar DNI a solo números
+            $dni = isset($data['stu_dni']) ? preg_replace('/\D/', '', (string) $data['stu_dni']) : null;
+
+            // ⚠️ Importante: NO usar bcrypt aquí; tu mutator lo hashea.
             $usuario = Usuario::create([
-                'nombres'   => $nombres,
-                'apellidos' => $apellidos,
-                'email'     => $email,
-                'role_id'   => $rolEstudiante->id,
-                'password'  => bcrypt(str()->random(32)), // Contraseña más segura
+                'nombres'          => $nombres,
+                'apellidos'        => $apellidos,
+                'email'            => $email,
+                'role_id'          => $rolEstudiante->id,
+                'tipo_documento'   => $dni ? 'DNI' : null,
+                'numero_documento' => $dni,
+                'password'         => $dni ? $dni : str()->random(16), // ← el mutator hará el hash
+                'google_id'        => $googleUser->getId(),
+                'google_avatar'    => $googleUser->getAvatar(),
+                'provider'         => 'google',
+                'provider_id'      => $googleUser->getId(),
             ]);
 
-            // Crear estudiante
             Estudiante::create([
                 'usuario_id'    => $usuario->id,
                 'escuela_id'    => null,
@@ -126,50 +124,43 @@ class UsuarioController extends Controller
             ]);
         }
 
-        // Autenticamos y generamos token con Sanctum
+        // login y token sanctum
         Auth::login($usuario);
         $token = $usuario->createToken('auth_token', ['*'], now()->addHours(24))->plainTextToken;
 
-        // Obtener el state del request para devolverlo
         $state = $request->get('state');
 
-        // Preparar datos seguros para enviar al frontend
         $userData = [
-            'id' => $usuario->id,
-            'nombres' => $usuario->nombres,
+            'id'        => $usuario->id,
+            'nombres'   => $usuario->nombres,
             'apellidos' => $usuario->apellidos,
-            'email' => $usuario->email,
-            'rol' => $usuario->role->slug ?? null,
+            'email'     => $usuario->email,
+            'rol'       => $usuario->role->slug ?? null,
         ];
 
         $udhData = [
-            'nombres' => $this->sanitizeString($data['stu_nombres'] ?? ''),
-            'apellido_paterno' => $this->sanitizeString($data['stu_apellido_paterno'] ?? ''),
-            'apellido_materno' => $this->sanitizeString($data['stu_apellido_materno'] ?? ''),
-            'dni' => $this->sanitizeString($data['stu_dni'] ?? ''),
-            'codigo' => $this->sanitizeString($data['stu_codigo'] ?? ''),
-            'facultad' => $this->sanitizeString($data['stu_facultad'] ?? ''),
-            'programa' => $this->sanitizeString($data['stu_programa'] ?? ''),
-            'ciclo' => $this->sanitizeString($data['stu_ciclo'] ?? ''),
+            'nombres'           => $this->sanitizeString($data['stu_nombres'] ?? ''),
+            'apellido_paterno'  => $this->sanitizeString($data['stu_apellido_paterno'] ?? ''),
+            'apellido_materno'  => $this->sanitizeString($data['stu_apellido_materno'] ?? ''),
+            'dni'               => isset($data['stu_dni']) ? preg_replace('/\D/', '', (string) $data['stu_dni']) : null,
+            'codigo'            => $this->sanitizeString($data['stu_codigo'] ?? ''),
+            'facultad'          => $this->sanitizeString($data['stu_facultad'] ?? ''),
+            'programa'          => $this->sanitizeString($data['stu_programa'] ?? ''),
+            'ciclo'             => $this->sanitizeString($data['stu_ciclo'] ?? ''),
         ];
 
-        // Obtener orígenes permitidos desde configuración
         $allowedOrigins = [
             config('app.frontend_url', 'http://localhost:5173'),
             'http://localhost:5173',
             'http://127.0.0.1:5173',
-            'https://tu-frontend.com' // Reemplaza por tu dominio real
+            'https://tu-frontend.com'
         ];
-        
-        // Usar el primer origen válido para enviar el mensaje
         $targetOrigin = $allowedOrigins[0];
 
         return response()->make("
           <script>
-            // Validar que window.opener existe
             if (window.opener) {
               const targetOrigin = '{$targetOrigin}';
-              
               window.opener.postMessage({
                 type: 'google-auth-success',
                 usuario: " . json_encode($userData) . ",
@@ -177,23 +168,57 @@ class UsuarioController extends Controller
                 foto: '" . htmlspecialchars($googleUser->getAvatar()) . "',
                 token: '" . htmlspecialchars($token) . "'" . 
                 ($state ? ",\nstate: '" . htmlspecialchars($state) . "'" : '') . "
-              }, '*'); // Temporalmente usar * para debug
+              }, '*');
             }
             window.close();
           </script>
         ", 200, [
             'Content-Type' => 'text/html',
-            'X-Frame-Options' => 'SAMEORIGIN', // Cambiado de DENY a SAMEORIGIN
+            'X-Frame-Options' => 'SAMEORIGIN',
             'X-Content-Type-Options' => 'nosniff'
         ]);
     }
 
     /**
-     * Sanitizar strings para prevenir XSS
+     * Login tradicional (email + contraseña)
+     */
+    public function login(Request $request)
+    {
+        // normalizar email
+        $email = strtolower(trim((string) $request->input('email')));
+        $password = (string) $request->input('password');
+
+        if (!$email || !$password) {
+            return response()->json(['error' => 'Email y contraseña son obligatorios'], 422);
+        }
+
+        if (!Auth::attempt(['email' => $email, 'password' => $password])) {
+            return response()->json(['error' => 'Credenciales inválidas'], 401);
+        }
+
+        /** @var \App\Models\Usuario $usuario */
+        $usuario = Auth::user();
+        $token = $usuario->createToken('auth_token', ['*'], now()->addHours(24))->plainTextToken;
+
+        return response()->json([
+            'status'  => 'success',
+            'token'   => $token,
+            'usuario' => [
+                'id'        => $usuario->id,
+                'nombres'   => $usuario->nombres,
+                'apellidos' => $usuario->apellidos,
+                'email'     => $usuario->email,
+                'rol'       => $usuario->role->slug ?? null,
+            ]
+        ]);
+    }
+
+    /**
+     * Sanitizar strings
      */
     private function sanitizeString($string)
     {
-        return htmlspecialchars(trim($string), ENT_QUOTES, 'UTF-8');
+        return htmlspecialchars(trim((string) $string), ENT_QUOTES, 'UTF-8');
     }
 
     /**
@@ -207,7 +232,7 @@ class UsuarioController extends Controller
               window.opener.postMessage({
                 type: 'google-auth-error',
                 message: '" . htmlspecialchars($message) . "'
-              }, '*'); // Usar * para errores para asegurar entrega
+              }, '*');
             }
             window.close();
           </script>
