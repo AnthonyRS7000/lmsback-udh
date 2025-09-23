@@ -97,10 +97,8 @@ class UsuarioController extends Controller
                 return $this->errorResponse('Datos incompletos del estudiante', 400);
             }
 
-            // ✅ limpiar DNI a solo números
             $dni = isset($data['stu_dni']) ? preg_replace('/\D/', '', (string) $data['stu_dni']) : null;
 
-            // ⚠️ Importante: NO usar bcrypt aquí; tu mutator lo hashea.
             $usuario = Usuario::create([
                 'nombres'          => $nombres,
                 'apellidos'        => $apellidos,
@@ -108,7 +106,7 @@ class UsuarioController extends Controller
                 'role_id'          => $rolEstudiante->id,
                 'tipo_documento'   => $dni ? 'DNI' : null,
                 'numero_documento' => $dni,
-                'password'         => $dni ? $dni : str()->random(16), // ← el mutator hará el hash
+                'password'         => $dni ? $dni : str()->random(16),
                 'google_id'        => $googleUser->getId(),
                 'google_avatar'    => $googleUser->getAvatar(),
                 'provider'         => 'google',
@@ -153,9 +151,11 @@ class UsuarioController extends Controller
             config('app.frontend_url', 'http://localhost:5173'),
             'http://localhost:5173',
             'http://127.0.0.1:5173',
-            'https://tu-frontend.com'
+            'https://lmsback.sistemasudh.com'
         ];
-        $targetOrigin = $allowedOrigins[0];
+
+        $referer = $request->headers->get('origin');
+        $targetOrigin = in_array($referer, $allowedOrigins) ? $referer : $allowedOrigins[0];
 
         return response()->make("
           <script>
@@ -166,9 +166,9 @@ class UsuarioController extends Controller
                 usuario: " . json_encode($userData) . ",
                 datos_udh: " . json_encode($udhData) . ",
                 foto: '" . htmlspecialchars($googleUser->getAvatar()) . "',
-                token: '" . htmlspecialchars($token) . "'" . 
-                ($state ? ",\nstate: '" . htmlspecialchars($state) . "'" : '') . "
-              }, '*');
+                token: '" . htmlspecialchars($token) . "'" .
+                ($state ? ", state: '" . htmlspecialchars($state) . "'" : '') . "
+              }, targetOrigin);
             }
             window.close();
           </script>
@@ -184,7 +184,6 @@ class UsuarioController extends Controller
      */
     public function login(Request $request)
     {
-        // normalizar email
         $email = strtolower(trim((string) $request->input('email')));
         $password = (string) $request->input('password');
 
@@ -213,17 +212,11 @@ class UsuarioController extends Controller
         ]);
     }
 
-    /**
-     * Sanitizar strings
-     */
     private function sanitizeString($string)
     {
         return htmlspecialchars(trim((string) $string), ENT_QUOTES, 'UTF-8');
     }
 
-    /**
-     * Respuesta de error consistente
-     */
     private function errorResponse($message, $status = 400)
     {
         return response()->make("
