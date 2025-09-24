@@ -8,6 +8,7 @@ use App\Http\Controllers\EntregaTareaController;
 use App\Http\Controllers\DocenteController;
 use App\Http\Controllers\CursoController;
 use App\Http\Controllers\HorarioController;
+use App\Http\Controllers\EstudianteController;
 
 // === Autenticación con Google ===
 Route::get('/auth/google', [UsuarioController::class, 'redirectToGoogle']);
@@ -26,6 +27,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // === Usuarios ===
     Route::get('/usuarios', [UsuarioController::class, 'index']);
     Route::get('/usuarios/{usuario}', [UsuarioController::class, 'show']);
+
+    //ESTUDIANTES
+    Route::get('/estudiantes/notas', [EstudianteController::class, 'verNotas']);
 
     // === Horarios ===
     Route::get('/horario/{codalu}/{semsem}', [HorarioController::class, 'getHorario']);
