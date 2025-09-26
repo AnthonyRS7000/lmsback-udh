@@ -155,4 +155,88 @@ class EstudianteController extends Controller
             'data'   => $response->json(),
         ]);
     }
+    public function asistencia(Request $request, UdhTokenService $tokenService)
+    {
+        $request->validate([
+            'codalu' => 'required|string|max:20',
+            'semsem' => 'required|string|max:10',
+            'codcur' => 'required|string|max:20',
+            'secsem' => 'required|string|max:5',
+            'codper' => 'required|string|max:20',
+        ]);
+
+        $params = $request->only(['codalu', 'semsem', 'codcur', 'secsem', 'codper']);
+
+        // 1. Token vigente
+        $tokenRecord = $tokenService->getActiveToken();
+        if (!$tokenRecord) {
+            return response()->json(['error' => 'No hay token válido en BD'], 500);
+        }
+        $params['token'] = $tokenRecord->token_actual;
+
+        // 2. URL
+        $url = config('udh.apis.asistencia_alumno');
+
+        Log::info('🌍 Consultando API UDH - Asistencia Alumno', [
+            'url'   => $url,
+            'query' => $params,
+        ]);
+
+        // 3. Request
+        $response = Http::get($url, $params);
+
+        if ($response->failed()) {
+            return response()->json([
+                'error'  => 'Error al consultar API UDH',
+                'status' => $response->status(),
+                'body'   => $response->body(),
+            ], 500);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data'   => $response->json(),
+        ]);
+    }
+
+    public function rendimientoAcademico(Request $request, UdhTokenService $tokenService)
+        {
+            $request->validate([
+                'codalu' => 'required|string|max:20',
+            ]);
+
+            $codalu = trim($request->input('codalu'));
+
+            // 1. Obtener token válido
+            $tokenRecord = $tokenService->getActiveToken();
+            if (!$tokenRecord) {
+                return response()->json(['error' => 'No hay token válido en BD'], 500);
+            }
+            $token = $tokenRecord->token_actual;
+
+            // 2. URL y parámetros
+            $url = config('udh.apis.rendimiento_academico');
+            $query = [
+                'codalu' => $codalu,
+                'token'  => $token,
+            ];
+
+            Log::info('🌍 Consultando API UDH - Rendimiento Académico', ['url' => $url, 'query' => $query]);
+
+            // 3. Request
+            $response = Http::get($url, $query);
+
+            if ($response->failed()) {
+                return response()->json([
+                    'error'  => 'Error al consultar API UDH',
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                ], 500);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'data'   => $response->json(),
+            ]);
+        }
 }

@@ -45,6 +45,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     //estudiantes
     Route::get('/estudiantes/historial-academico', [EstudianteController::class, 'historialAcademico']);
+    Route::get('/estudiantes/asistencia', [EstudianteController::class, 'asistencia']);
+    Route::get('/estudiantes/rendimiento-academico', [EstudianteController::class, 'rendimientoAcademico']);
+
     
     // === Cursos ===
     Route::apiResource('cursos', CursoController::class);
