@@ -42,7 +42,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // === Docentes (uso técnico con token especial) ===
     Route::get('/docentes/dni/{dni}', [DocenteController::class, 'getByDni']);
+
+    //estudiantes
+    Route::get('/estudiantes/historial-academico', [EstudianteController::class, 'historialAcademico']);
     
     // === Cursos ===
     Route::apiResource('cursos', CursoController::class);
+    Route::get('/estudiantes/cursos-llevados', [CursoController::class, 'cursosLlevados']);
 });

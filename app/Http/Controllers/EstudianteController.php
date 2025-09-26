@@ -115,4 +115,44 @@ class EstudianteController extends Controller
         json_decode($string);
         return (json_last_error() === JSON_ERROR_NONE);
     }
+
+    public function historialAcademico(Request $request, UdhTokenService $tokenService)
+    {
+        $request->validate([
+            'codalu' => 'required|string|max:20',
+        ]);
+
+        $codalu = trim($request->input('codalu'));
+
+        // 1. Token válido
+        $tokenRecord = $tokenService->getActiveToken();
+        if (!$tokenRecord) {
+            return response()->json(['error' => 'No hay token válido en BD'], 500);
+        }
+        $token = $tokenRecord->token_actual;
+
+        // 2. URL API
+        $url = config('udh.apis.historial_academico');
+        $query = [
+            'codalu' => $codalu,
+            'token'  => $token,
+        ];
+
+        Log::info('🌍 Consultando API UDH - Historial Académico', ['url' => $url, 'query' => $query]);
+
+        $response = Http::get($url, $query);
+
+        if ($response->failed()) {
+            return response()->json([
+                'error'  => 'Error al consultar API UDH',
+                'status' => $response->status(),
+                'body'   => $response->body(),
+            ], 500);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data'   => $response->json(),
+        ]);
+    }
 }
